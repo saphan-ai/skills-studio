@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/saphan-ai/skills-studio/blob/main/spec/skill-format-v1.schema.json",
+  "title": "Skill format v1 — front matter of SKILL.md",
+  "description": "Describes the front matter of a SKILL.md file after it has been read into the JSON data model (see SKILL_FORMAT_V1.md, section 4). Each constraint sits in its own sub-schema carrying an x-rule annotation: the named rule a validator reports when that constraint fails. x-rule is an annotation; a validator that ignores it still accepts and refuses the same documents.",
+  "type": "object",
+  "allOf": [
+    {
+      "x-rule": "SF-KEY-UNKNOWN",
+      "properties": {
+        "name": true,
+        "description": true,
+        "license": true,
+        "compatibility": true,
+        "metadata": true,
+        "allowed-tools": true
+      },
+      "additionalProperties": false
+    },
+    { "x-rule": "SF-NAME-REQUIRED", "required": ["name"] },
+    { "x-rule": "SF-DESCRIPTION-REQUIRED", "required": ["description"] },
+    {
+      "properties": {
+        "name": {
+          "allOf": [
+            { "x-rule": "SF-FIELD-TYPE", "type": "string" },
+            { "x-rule": "SF-NAME-PATTERN", "pattern": "^[a-z0-9-]+$" },
+            { "x-rule": "SF-NAME-LENGTH", "maxLength": 64 }
+          ]
+        },
+        "description": {
+          "allOf": [
+            { "x-rule": "SF-FIELD-TYPE", "type": "string" },
+            { "x-rule": "SF-DESCRIPTION-LENGTH", "minLength": 1, "maxLength": 1024 }
+          ]
+        },
+        "license": { "x-rule": "SF-FIELD-TYPE", "type": "string" },
+        "compatibility": {
+          "allOf": [
+            { "x-rule": "SF-FIELD-TYPE", "type": "string" },
+            { "x-rule": "SF-COMPATIBILITY-LENGTH", "maxLength": 500 }
+          ]
+        },
+        "allowed-tools": { "x-rule": "SF-FIELD-TYPE", "type": "string" },
+        "metadata": {
+          "allOf": [
+            { "x-rule": "SF-METADATA-TYPE", "type": "object" },
+            {
+              "additionalProperties": { "x-rule": "SF-METADATA-VALUE-TYPE", "type": "string" }
+            },
+            {
+              "properties": {
+                "saphan.origin": { "x-rule": "SF-SAPHAN-ORIGIN", "enum": ["builtin", "project"] },
+                "saphan.default": { "x-rule": "SF-SAPHAN-DEFAULT", "enum": ["on", "off"] }
+              }
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
