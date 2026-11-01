@@ -498,6 +498,11 @@ func TestFrontMatterReader(t *testing.T) {
 		"---\nname:a\n---\n":             RuleFrontMatterSyntax,
 		"---\n- item\n---\n":             RuleFrontMatterSyntax,
 		"---\nbad key: x\n---\n":         RuleFrontMatterSyntax,
+		"---\nname: tRUE\n---\n":         RuleFrontMatterSyntax,
+		"---\nname: nUlL\n---\n":         RuleFrontMatterSyntax,
+		"---\nname: ,a\n---\n":           RuleFrontMatterSyntax,
+		"---\nname: ]a\n---\n":           RuleFrontMatterSyntax,
+		"---\nname: }a\n---\n":           RuleFrontMatterSyntax,
 	}
 	for text, rule := range bad {
 		if _, v := ParseFrontMatter([]byte(text)); v == nil || v.Rule != rule {

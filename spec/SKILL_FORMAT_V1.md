@@ -103,9 +103,20 @@ the following subset of YAML and nothing more (`SF-FRONTMATTER-SYNTAX`):
   - a **single-quoted** string, in which a quote is written twice;
   - a **plain** scalar, which runs to the end of the line. A plain scalar MUST
     NOT contain `: ` or ` #`, and MUST NOT begin with any of
-    `[ { & * ! | > % @ ` - ?`. A plain `true` or `false` is a boolean, `null` or
-    `~` is null, a decimal number such as `3` or `-1.5` is a number, and
-    anything else is a string. The plain words `y`, `n`, `yes`, `no`, `on` and
+    ``[ ] { } , & * ! | > % @ ` - ? #``
+    (the YAML indicator characters; a value that begins with `'` or `"` is a
+    quoted string). A plain scalar is read in this order:
+    - exactly `true` or `false`, in lowercase, is a boolean;
+    - exactly `null` or `~` is null;
+    - the words `true`, `false` and `null` in any other letter case, such as
+      `tRUE` or `Null`, are refused: some YAML readers read them as booleans or
+      null and some as strings, so write them in quotes;
+    - text that matches the regular expression
+      `^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$` is a number (`3`,
+      `-1.5`, `.5`, `1e5`), read as a 64-bit float;
+    - anything else is a string.
+
+    The plain words `y`, `n`, `yes`, `no`, `on` and
     `off`, in any letter case, are refused, because some YAML readers turn them
     into booleans: write them in quotes. A plain scalar that some YAML 1.1 or
     1.2 core-schema reader reads as something other than the string given here is

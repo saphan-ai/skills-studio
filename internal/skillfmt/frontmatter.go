@@ -186,7 +186,7 @@ func parseScalar(s string, n int) (any, *Violation) {
 			return nil, syntax(n, "a single quote inside a single-quoted string must be doubled")
 		}
 		return strings.ReplaceAll(inner, "''", "'"), nil
-	case '[', '{', '&', '*', '!', '|', '>', '%', '@', '`', '-', '?', '#':
+	case '[', ']', '{', '}', ',', '&', '*', '!', '|', '>', '%', '@', '`', '-', '?', '#':
 		return nil, syntax(n, "a value starting with %q: lists, maps, anchors, tags, comments and block scalars are not in the subset; quote the text", string(s[0]))
 	}
 	if divergentPlain(s) {
@@ -199,12 +199,16 @@ func parseScalar(s string, n int) (any, *Violation) {
 	switch {
 	case yamlOneOneBool[lower]:
 		return nil, syntax(n, "the plain word %q reads as a boolean in some YAML versions; write it in quotes", s)
-	case lower == "true":
+	case s == "true":
 		return true, nil
-	case lower == "false":
+	case s == "false":
 		return false, nil
-	case lower == "null" || s == "~":
+	case s == "null" || s == "~":
 		return nil, nil
+	case lower == "true" || lower == "false" || lower == "null":
+		// Only the exact lowercase words are bool or null; a YAML reader differs on
+		// the other letter cases, so they are refused rather than guessed.
+		return nil, syntax(n, "the plain word %q is a boolean or null in some YAML versions and a string in others; write it in quotes", s)
 	case numberPattern.MatchString(s):
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return f, nil
