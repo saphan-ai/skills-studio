@@ -1,6 +1,7 @@
 package skillfmt
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -67,16 +68,26 @@ func syntax(line int, format string, a ...any) *Violation {
 // "  key: value" lines under a key with an empty value, scalars that are plain,
 // double-quoted (JSON escapes) or single-quoted. Anything else is refused.
 func ParseFrontMatter(text []byte) (map[string]any, *Violation) {
-	lines := strings.Split(string(text), "\n")
-	if lines[0] != "---" {
-		return nil, &Violation{Rule: RuleFrontMatterMissing, Message: "the first line of SKILL.md (after any header) is not ---"}
-	}
+	// Read lines up to the closing "---" only; the rest of the file is not split.
+	var lines []string
 	end := -1
-	for i := 1; i < len(lines); i++ {
-		if lines[i] == "---" {
-			end = i
+	rest := text
+	for {
+		line, after, found := bytes.Cut(rest, []byte("\n"))
+		s := string(line)
+		if len(lines) == 0 && s != "---" {
+			return nil, &Violation{Rule: RuleFrontMatterMissing, Message: "the first line of SKILL.md (after any header) is not ---"}
+		}
+		if len(lines) > 0 && s == "---" {
+			end = len(lines)
+			lines = append(lines, s)
 			break
 		}
+		lines = append(lines, s)
+		if !found {
+			break
+		}
+		rest = after
 	}
 	if end < 0 {
 		return nil, &Violation{Rule: RuleFrontMatterMissing, Message: "the front matter is not closed by a line ---"}

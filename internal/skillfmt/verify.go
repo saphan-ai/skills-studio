@@ -2,6 +2,7 @@ package skillfmt
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -75,9 +76,14 @@ func Verify(dir string) (Result, error) {
 		return res, nil
 	}
 
-	data, err := os.ReadFile(filepath.Join(abs, "SKILL.md"))
+	data, tooBig, err := readSkillMD(filepath.Join(abs, "SKILL.md"))
 	if err != nil {
 		return Result{}, err
+	}
+	if tooBig != nil {
+		res.Violations = append(res.Violations, *tooBig)
+		sortViolations(res.Violations)
+		return res, nil
 	}
 	hash, doc, vs := readDocument(data, schema, filepath.Base(abs))
 	res.Violations = append(res.Violations, vs...)
@@ -89,6 +95,37 @@ func Verify(dir string) (Result, error) {
 	}
 	sortViolations(res.Violations)
 	return res, nil
+}
+
+// readSkillMD reads SKILL.md, never more than MaxSkillMDBytes+1 bytes. A size
+// over the limit is refused from the Lstat size before any read; the bounded
+// read also holds if the file grows between the size and the read.
+func readSkillMD(path string) ([]byte, *Violation, error) {
+	tooBig := &Violation{
+		Rule:    RuleSkillMDSize,
+		Path:    "SKILL.md",
+		Message: fmt.Sprintf("SKILL.md is larger than %d bytes", MaxSkillMDBytes),
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	if info.Size() > MaxSkillMDBytes {
+		return nil, tooBig, nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, MaxSkillMDBytes+1))
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(data) > MaxSkillMDBytes {
+		return nil, tooBig, nil
+	}
+	return data, nil, nil
 }
 
 // readDocument runs the SKILL.md checks in order: text, header, front matter,

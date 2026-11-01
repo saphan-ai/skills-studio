@@ -55,6 +55,12 @@ Rules for the directory:
 `SKILL.md` is UTF-8 text. Its line ends are a single LF byte. It has no byte
 order mark, no CR byte and no NUL byte (`SF-TEXT-ENCODING`).
 
+`SKILL.md` is at most 65536 bytes (`SF-SKILLMD-SIZE`). A verifier refuses a
+larger file from its size, before it reads it, and never reads past the limit.
+The number is a bound on what a verifier must hold in memory, chosen about three
+times above the 5 000 tokens the Agent Skills guidance suggests for a skill; it
+is not a judgement on how long a good skill is.
+
 ### 3.1 The projection header
 
 A system that stores a skill may write a **decision-projection header** at the
@@ -259,6 +265,7 @@ A verifier refuses with a named rule. The name is stable within version 1.
 | `SF-FILE-UNLISTED` | an entry other than `SKILL.md`, `references/`, `assets/` |
 | `SF-FILE-SYMLINK` | a symbolic link at any depth |
 | `SF-TEXT-ENCODING` | `SKILL.md` that is not UTF-8 with LF line ends, no BOM, no NUL |
+| `SF-SKILLMD-SIZE` | a `SKILL.md` of more than 65536 bytes |
 | `SF-HEADER-MALFORMED` | a projection header that is not closed, or not followed by one blank line |
 | `SF-FRONTMATTER-MISSING` | no front matter block at the head of the canonical text |
 | `SF-FRONTMATTER-SYNTAX` | front matter outside the subset of section 4 |
