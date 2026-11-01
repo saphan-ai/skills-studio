@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"unicode/utf16"
 )
@@ -102,6 +103,14 @@ func TestEveryKindOfUnscannedFileIsAFinding(t *testing.T) {
 	}
 	if rep := mustCheck(t, asDir); !hasFinding(rep, "SKILL.md") {
 		t.Errorf("SKILL.md is a directory: no finding: %+v", rep.Findings)
+	}
+
+	// A FIFO: an entry that is neither a regular file nor a directory.
+	fifo := skillWith(t, okDesc, "x\n", nil)
+	if err := syscall.Mkfifo(filepath.Join(fifo, "pipe"), 0o644); err != nil {
+		t.Logf("no FIFOs here, case skipped: %v", err)
+	} else if rep := mustCheck(t, fifo); !hasFinding(rep, "pipe") {
+		t.Errorf("FIFO: no finding: %+v", rep.Findings)
 	}
 }
 

@@ -343,13 +343,17 @@ error (exit 2), never a partial read presented as a whole; a single file past
 What the text rules did not read is a finding, not only a remark, so the exit
 code cannot be 0 over it: a file that is not UTF-8 text, contains NUL, is over
 8 MiB or cannot be read, a symbolic link (not followed), an entry that is
-neither a regular file nor a directory, and a directory with no `SKILL.md`
-file. A skill whose `SKILL.md` cannot be read is therefore never a clean run.
+neither a regular file nor a directory, a directory with no `SKILL.md`
+file, and a `SKILL.md` whose front matter is outside the subset of §4 (its
+bytes are read, but the decoded values are not, and the front matter parts of
+`SC-HIDDEN-TEXT`, `SC-OVERRIDE-PHRASE`, `SC-ALLOWED-TOOLS` and
+`SC-DESCRIPTION-OVERCLAIM` do not run; the finding names the error). A skill
+whose `SKILL.md` cannot be read is therefore never a clean run.
 
 | rule | severity | finds |
 |---|---|---|
-| `SC-HIDDEN-TEXT` | refuse | a zero-width character (U+200B, U+200C, U+200D, U+2060 to U+2064, U+FEFF, U+180E), a Unicode tag character (U+E0000 to U+E007F) or a bidirectional control (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069), a soft hyphen or combining grapheme joiner (U+00AD, U+034F), a Hangul filler (U+115F, U+1160, U+3164, U+FFA0) or a supplementary variation selector (U+E0100 to U+E01EF) in any text file, and in the decoded value of any front matter string |
-| `SC-OVERRIDE-PHRASE` | flag | a phrase from the list below that tells an agent to drop its instructions, in any text file and in the decoded value of any front matter string |
+| `SC-HIDDEN-TEXT` | refuse | a zero-width character (U+200B, U+200C, U+200D, U+2060 to U+2064, U+FEFF, U+180E), a Unicode tag character (U+E0000 to U+E007F) or a bidirectional control (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069), a soft hyphen or combining grapheme joiner (U+00AD, U+034F), a Hangul filler (U+115F, U+1160, U+3164, U+FFA0) or a supplementary variation selector (U+E0100 to U+E01EF) in any text file, in each path of the tree, and in the decoded value of any front matter string the format's subset can read (a block outside the subset is a `SC-UNSCANNED` finding instead) |
+| `SC-OVERRIDE-PHRASE` | flag | a phrase from the list below that tells an agent to drop its instructions, in any text file and in the decoded value of any front matter string the subset can read |
 | `SC-URL` | flag | a URL that is neither a moving reference nor read by a fetch instruction |
 | `SC-URL-MOVING-REF` | flag | a URL with a path segment `main`, `master`, `HEAD` or `latest` (also after an `@`), so the bytes behind it change without the skill changing |
 | `SC-URL-FETCH` | refuse | a URL on a line with, or one line before or after, a fetch instruction (`fetch`, `WebFetch`, `curl`, `wget`), so behaviour is read at run time from outside the hashed bytes |
@@ -357,7 +361,7 @@ file. A skill whose `SKILL.md` cannot be read is therefore never a clean run.
 | `SC-CREDENTIAL` | flag | a credential path (`~/.ssh`, `~/.aws`, `.netrc`, `id_rsa` and its kin, `*.pem`) or an environment variable named like a token or key |
 | `SC-ALLOWED-TOOLS` | flag | an `allowed-tools` key; the sentence names each tool it pre-approves |
 | `SC-DESCRIPTION-OVERCLAIM` | flag | a description that asks to be used for all, any or every task, or lists more than the configured number of alternatives in one sentence |
-| `SC-UNSCANNED` | flag | an entry the text rules did not read: a file that is not UTF-8 text, over 8 MiB or unreadable, a symbolic link, a special file, or a missing `SKILL.md` |
+| `SC-UNSCANNED` | flag | an entry the text rules did not read: a file that is not UTF-8 text, over 8 MiB or unreadable, a symbolic link, a special file, a missing `SKILL.md`, or a `SKILL.md` whose front matter is outside the subset (not decoded; four rules' front matter parts did not run) |
 
 Each URL yields exactly one finding, under the strongest rule that applies:
 `SC-URL-FETCH`, then `SC-URL-MOVING-REF`, then `SC-URL`. A file that is found
@@ -388,8 +392,11 @@ and other compatibility forms (NFKC is not applied), HTML entities, homoglyphs
 (a letter from another script that looks like a Latin one), combining marks
 placed on a letter, a URL split over lines, a URL without a scheme (`curl
 example.com/install`), a phrase in another language, and a phrase built up from
-parts. The variation selectors U+FE00 to U+FE0F are not detected as hidden
-text. The remark below says so on every run.
+parts. JSON escapes in front matter are decoded for the hidden-text and
+phrase rules only: a URL or a credential path written with escapes in a front
+matter value (`https:\/\/example.com\/main\/x.md`) is not matched by the URL
+and credential rules. The variation selectors U+FE00 to U+FE0F are not
+detected as hidden text. The remark below says so on every run.
 
 ```
 ignore previous instructions
@@ -421,7 +428,7 @@ list of rules that ran):
 remark: a text scan cannot detect semantic hijacking: instructions that comply in wording and still steer an agent against its user; one outside study, cited at the owner's request and not re-checked here, measured 0 % detection by a text scanner alone
 remark: behaviour that lives at a fetched URL is outside the files read: this check opens no URL, so it cannot say what any URL returns now or will return later
 remark: the behaviour of a binary or non-text asset is not read; when the skill has one, a later remark lists it
-remark: patterns are literal text: a phrase in another language, in an encoding, or built up from parts is not matched, and neither are full-width letters, HTML entities, look-alike letters, combining marks, a URL split over lines, a URL without a scheme, or the variation selectors U+FE00 to U+FE0F
+remark: patterns are literal text: a phrase in another language, in an encoding, or built up from parts is not matched, and neither are full-width letters, HTML entities, look-alike letters, combining marks, JSON escapes in front matter for URLs and credential paths, a URL split over lines, a URL without a scheme, or the variation selectors U+FE00 to U+FE0F
 remark: a clean result is evidence that these patterns are absent and nothing more: it is not a statement that the skill is harmless, and no model ran on it
 ```
 

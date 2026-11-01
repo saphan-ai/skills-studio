@@ -11,7 +11,7 @@ var FixedRemarks = []string{
 	"a text scan cannot detect semantic hijacking: instructions that comply in wording and still steer an agent against its user; one outside study, cited at the owner's request and not re-checked here, measured 0 % detection by a text scanner alone",
 	"behaviour that lives at a fetched URL is outside the files read: this check opens no URL, so it cannot say what any URL returns now or will return later",
 	"the behaviour of a binary or non-text asset is not read; when the skill has one, a later remark lists it",
-	"patterns are literal text: a phrase in another language, in an encoding, or built up from parts is not matched, and neither are full-width letters, HTML entities, look-alike letters, combining marks, a URL split over lines, a URL without a scheme, or the variation selectors U+FE00 to U+FE0F",
+	"patterns are literal text: a phrase in another language, in an encoding, or built up from parts is not matched, and neither are full-width letters, HTML entities, look-alike letters, combining marks, JSON escapes in front matter for URLs and credential paths, a URL split over lines, a URL without a scheme, or the variation selectors U+FE00 to U+FE0F",
 	"a clean result is evidence that these patterns are absent and nothing more: it is not a statement that the skill is harmless, and no model ran on it",
 }
 
@@ -33,7 +33,7 @@ func remarks(s *skill, rules []string) []string {
 		out = append(out, fmt.Sprintf("%d symbolic link(s) were not followed and their targets were not read: %s", len(s.symlinks), listShort(s.symlinks)))
 	}
 	if s.fmErr != "" {
-		out = append(out, fmt.Sprintf("the front matter could not be read (%s), so SC-ALLOWED-TOOLS and SC-DESCRIPTION-OVERCLAIM did not run", oneLine(s.fmErr)))
+		out = append(out, fmt.Sprintf("the front matter could not be read (%s), so the front matter parts of %s did not run and its decoded values were not scanned", oneLine(s.fmErr), strings.Join(frontMatterRules, ", ")))
 	}
 	out = append(out, "rules run: "+strings.Join(rules, " "))
 	return out

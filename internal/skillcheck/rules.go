@@ -138,6 +138,22 @@ func hiddenText(s *skill, _ Config) []Finding {
 			}
 		}
 	}
+	// Names are text too: a bidirectional control in a file name changes what a
+	// reviewer reads in a listing.
+	var paths []string
+	for _, f := range s.files {
+		paths = append(paths, f.path)
+	}
+	paths = append(paths, s.dirs...)
+	paths = append(paths, s.symlinks...)
+	paths = append(paths, s.special...)
+	sort.Strings(paths)
+	for _, p := range paths {
+		if seen := hiddenIn(p); len(seen) > 0 {
+			out = append(out, finding(RuleHiddenText, Refuse, p, 1,
+				"the path holds characters a reader cannot see, %s; the name a person reviews is not the name on disk", strings.Join(seen, ", ")))
+		}
+	}
 	// The decoded front matter values: an escape in a double-quoted string is
 	// ASCII in the file and a hidden character in what the agent reads.
 	for _, v := range fmStrings(s) {
@@ -492,6 +508,10 @@ func dedupe(in []string) []string {
 	return out
 }
 
+// frontMatterRules are the rules with a part that needs the decoded front
+// matter; none of those parts runs when the block is outside the subset.
+var frontMatterRules = []string{RuleHiddenText, RuleOverridePhrase, RuleAllowedTools, RuleDescriptionOverrun}
+
 // ---- entries no text rule read ----
 
 // unscanned makes what the run could not read a finding. A remark tells a
@@ -500,9 +520,11 @@ func dedupe(in []string) []string {
 func unscanned(s *skill, _ Config) []Finding {
 	var out []Finding
 	haveSkillMd := false
+	skillMdText := false
 	for _, f := range s.files {
 		if f.path == "SKILL.md" {
 			haveSkillMd = true
+			skillMdText = f.text
 		}
 		if !f.text {
 			out = append(out, finding(RuleUnscanned, Flag, f.path, 1,
@@ -512,6 +534,15 @@ func unscanned(s *skill, _ Config) []Finding {
 	if !haveSkillMd {
 		out = append(out, finding(RuleUnscanned, Flag, "SKILL.md", 1,
 			"there is no SKILL.md file in the directory, so there is no skill text to check and no front matter to read; give the directory of a skill"))
+	}
+	// A SKILL.md that is text but whose front matter is outside the subset:
+	// its bytes were read, its decoded values were not, and four rules' front
+	// matter halves did not run. (A missing or non-text SKILL.md is already a
+	// finding above.)
+	if skillMdText && s.fmErr != "" {
+		out = append(out, finding(RuleUnscanned, Flag, "SKILL.md", 1,
+			"the front matter could not be read (%s), so its decoded values were not scanned and the front matter parts of %s did not run; rewrite the block in the subset the format allows, then check again",
+			oneLine(s.fmErr), strings.Join(frontMatterRules, ", ")))
 	}
 	for _, p := range s.symlinks {
 		out = append(out, finding(RuleUnscanned, Flag, p, 1,
