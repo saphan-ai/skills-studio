@@ -55,8 +55,33 @@ func write(t *testing.T, p, content string, mode os.FileMode) {
 
 const okDesc = "description: A plain description. Use when testing.\n"
 
+// expectedRules is written out here, not read from the registry: a rule taken
+// out of the registry must turn its canary test red, not make the test vanish.
+var expectedRules = []Rule{
+	{ID: RuleHiddenText, Severity: Refuse},
+	{ID: RuleOverridePhrase, Severity: Flag},
+	{ID: RuleURL, Severity: Flag},
+	{ID: RuleURLMovingRef, Severity: Flag},
+	{ID: RuleURLFetch, Severity: Refuse},
+	{ID: RuleExecutable, Severity: Refuse},
+	{ID: RuleCredential, Severity: Flag},
+	{ID: RuleAllowedTools, Severity: Flag},
+	{ID: RuleDescriptionOverrun, Severity: Flag},
+}
+
+func TestRegistryIsTheExpectedRules(t *testing.T) {
+	if len(Rules) != len(expectedRules) {
+		t.Fatalf("the registry holds %d rules, the test expects %d", len(Rules), len(expectedRules))
+	}
+	for i, r := range expectedRules {
+		if Rules[i].ID != r.ID || Rules[i].Severity != r.Severity {
+			t.Errorf("registry entry %d is %s/%s, expected %s/%s", i, Rules[i].ID, Rules[i].Severity, r.ID, r.Severity)
+		}
+	}
+}
+
 func TestEveryCanaryIsFlaggedByExactlyItsRule(t *testing.T) {
-	for _, r := range Rules {
+	for _, r := range expectedRules {
 		t.Run(r.ID, func(t *testing.T) {
 			dir := filepath.Join("testdata", "canaries", strings.ToLower(r.ID))
 			rep := mustCheck(t, dir)
