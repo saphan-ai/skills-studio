@@ -16,6 +16,41 @@ var (
 	yamlOneOneBool = map[string]bool{"y": true, "n": true, "yes": true, "no": true, "on": true, "off": true}
 )
 
+// Plain scalars a YAML 1.1 or 1.2-core reader resolves to something other than
+// the string (or decimal number) this reader returns. Each is refused.
+var divergentPatterns = []*regexp.Regexp{
+	// 1.2 core and 1.1 integers in other bases; 1.1 octal (leading zero).
+	regexp.MustCompile(`^[-+]?0(x[0-9a-fA-F_]+|o[0-7_]+|b[01_]+|[0-7_]+)$`),
+	// 1.2 core and 1.1 special floats, any letter case.
+	regexp.MustCompile(`^(?i)[-+]?\.(inf|nan)$`),
+	// 1.1 timestamps: a date, or a date and time.
+	regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}$`),
+	regexp.MustCompile(`^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}([Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(\.[0-9]*)?([ \t]*(Z|[-+][0-9]{1,2}(:[0-9]{2})?))?$`),
+	// 1.1 numbers with underscores.
+	regexp.MustCompile(`^[-+]?[0-9][0-9_]*(\.[0-9_]*)?([eE][-+]?[0-9_]+)?$`),
+	// 1.1 sexagesimal integers and floats.
+	regexp.MustCompile(`^[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?$`),
+}
+
+func divergentPlain(s string) bool {
+	for i, p := range divergentPatterns {
+		if !p.MatchString(s) {
+			continue
+		}
+		if i == 4 && !strings.Contains(s, "_") { // a plain decimal number is read as a number
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+// nonPrintable reports a code point a YAML reader refuses or reads as a line
+// break: C0 other than TAB, DEL, C1 (U+0085 included), U+2028 and U+2029.
+func nonPrintable(r rune) bool {
+	return (r < 0x20 && r != '\t') || r == 0x7f || (r >= 0x80 && r <= 0x9f) || r == 0x2028 || r == 0x2029
+}
+
 func syntax(line int, format string, a ...any) *Violation {
 	return &Violation{
 		Rule:    RuleFrontMatterSyntax,
@@ -52,6 +87,11 @@ func ParseFrontMatter(text []byte) (map[string]any, *Violation) {
 	for i := 1; i < end; i++ {
 		n := i + 1 // 1-based line number within the text
 		line := lines[i]
+		for _, r := range line {
+			if nonPrintable(r) {
+				return nil, syntax(n, "the non-printable code point U+%04X; YAML readers refuse or reinterpret it", r)
+			}
+		}
 		switch {
 		case strings.TrimSpace(line) == "" || strings.HasPrefix(line, "#"):
 			continue
@@ -146,8 +186,11 @@ func parseScalar(s string, n int) (any, *Violation) {
 			return nil, syntax(n, "a single quote inside a single-quoted string must be doubled")
 		}
 		return strings.ReplaceAll(inner, "''", "'"), nil
-	case '[', '{', '&', '*', '!', '|', '>', '%', '@', '`', '-', '?':
-		return nil, syntax(n, "a value starting with %q: lists, maps, anchors, tags and block scalars are not in the subset; quote the text", string(s[0]))
+	case '[', '{', '&', '*', '!', '|', '>', '%', '@', '`', '-', '?', '#':
+		return nil, syntax(n, "a value starting with %q: lists, maps, anchors, tags, comments and block scalars are not in the subset; quote the text", string(s[0]))
+	}
+	if divergentPlain(s) {
+		return nil, syntax(n, "the plain value %q is a number, date or special float in some YAML versions; write it in quotes", s)
 	}
 	if strings.Contains(s, ": ") || strings.HasSuffix(s, ":") || strings.Contains(s, " #") {
 		return nil, syntax(n, "a plain value containing a colon or a comment marker; quote the text")

@@ -504,6 +504,57 @@ func TestFrontMatterReader(t *testing.T) {
 			t.Errorf("%q: got %+v, want %s", text, v, rule)
 		}
 	}
+
+	// A plain scalar that a YAML 1.1 or 1.2-core reader resolves to something other
+	// than the string this reader would return is refused (review condition C1).
+	divergent := map[string]string{
+		"leading hash":            "#hello",
+		"hex":                     "0x1F",
+		"octal 1.2":               "0o17",
+		"binary":                  "0b101",
+		"octal 1.1":               "017",
+		"inf":                     ".inf",
+		"inf upper":               ".INF",
+		"nan mixed":               ".NaN",
+		"signed inf":              "+.inf",
+		"timestamp date":          "2026-10-31",
+		"timestamp T":             "2026-10-31T10:20:30Z",
+		"timestamp spaced":        "2026-10-31 10:20:30 +1",
+		"underscore int":          "1_000",
+		"underscore float":        "1_0.5",
+		"sexagesimal int":         "1:20",
+		"sexagesimal three parts": "1:20:30",
+		"sexagesimal float":       "1:20.5",
+	}
+	for name, v := range divergent {
+		text := "---\nname: a\ndescription: " + v + "\n---\n"
+		if _, viol := ParseFrontMatter([]byte(text)); viol == nil || viol.Rule != RuleFrontMatterSyntax {
+			t.Errorf("%s (%q): got %+v, want %s", name, v, viol, RuleFrontMatterSyntax)
+		}
+	}
+	// Non-printable code points anywhere in the front matter, comments included.
+	for name, r := range map[string]string{
+		"ESC": "\x1b", "SOH": "\x01", "DEL": "\x7f", "NEL U+0085": "\u0085",
+		"C1 U+0090": "\u0090", "LS U+2028": " ", "PS U+2029": " ",
+	} {
+		for where, text := range map[string]string{
+			"value":   "---\nname: a\ndescription: x" + r + "y\n---\n",
+			"comment": "---\n# x" + r + "y\nname: a\n---\n",
+			"quoted":  "---\nname: a\ndescription: \"x" + r + "y\"\n---\n",
+		} {
+			if _, viol := ParseFrontMatter([]byte(text)); viol == nil || viol.Rule != RuleFrontMatterSyntax {
+				t.Errorf("%s in %s: got %+v, want %s", name, where, viol, RuleFrontMatterSyntax)
+			}
+		}
+	}
+	// Near misses stay strings: only what a YAML reader resolves otherwise is refused.
+	for _, v := range []string{"0xZZ", "2026-10-31 release notes", "1:a", "1_a", "a_b", ".infinity", "0o9", "0b2", "v1:20", "tab here", "é — ü"} {
+		text := "---\nname: a\ndescription: " + v + "\n---\n"
+		got, viol := ParseFrontMatter([]byte(text))
+		if viol != nil || got["description"] != v {
+			t.Errorf("%q: got %v %+v, want the string unchanged", v, got, viol)
+		}
+	}
 }
 
 func TestPlainScalarTypesAreCaughtByTheSchema(t *testing.T) {
