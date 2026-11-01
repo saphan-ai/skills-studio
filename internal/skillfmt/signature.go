@@ -51,14 +51,21 @@ func ParsePublicKey(data []byte) (ed25519.PublicKey, *Violation) {
 	if block, _ := pem.Decode(data); block != nil {
 		key, err := x509.ParsePKIXPublicKey(block.Bytes)
 		if pk, ok := key.(ed25519.PublicKey); err == nil && ok {
-			return pk, nil
+			return checkNotSmallOrder(pk)
 		}
 		return nil, &Violation{Rule: RulePubkeyMalformed, Message: "the PEM block is not an ed25519 public key"}
 	}
 	if b, ok := decodeBytes(data, ed25519.PublicKeySize); ok {
-		return ed25519.PublicKey(b), nil
+		return checkNotSmallOrder(ed25519.PublicKey(b))
 	}
 	return nil, &Violation{Rule: RulePubkeyMalformed, Message: "the public key file is not 32 raw bytes, 64 hex digits, base64 of 32 bytes or a PEM public key"}
+}
+
+func checkNotSmallOrder(pk ed25519.PublicKey) (ed25519.PublicKey, *Violation) {
+	if isSmallOrder(pk) {
+		return nil, &Violation{Rule: RulePubkeyMalformed, Message: "the public key is a point of small order, which verifies signatures nobody made with it"}
+	}
+	return pk, nil
 }
 
 // CheckSignature verifies an ed25519 signature over the 32 digest bytes of the
