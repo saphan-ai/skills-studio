@@ -21,6 +21,7 @@ const (
 	RuleCredential         = "SC-CREDENTIAL"
 	RuleAllowedTools       = "SC-ALLOWED-TOOLS"
 	RuleDescriptionOverrun = "SC-DESCRIPTION-OVERCLAIM"
+	RuleUnscanned          = "SC-UNSCANNED"
 )
 
 // Rule is one static check. Check returns the findings of this rule only.
@@ -43,6 +44,7 @@ var Rules = []Rule{
 	{RuleCredential, Flag, "a credential path (~/.ssh, ~/.aws, .netrc, id_rsa, *.pem) or an environment variable named like a token or key", credential},
 	{RuleAllowedTools, Flag, "an allowed-tools front matter key, which pre-approves the tools it names", allowedTools},
 	{RuleDescriptionOverrun, Flag, "a description that asks to be used for all, any or every task, or lists more alternatives in one sentence than the configured limit", descriptionOverclaim},
+	{RuleUnscanned, Flag, "an entry the text rules did not read: a file that is not UTF-8 text, over the size limit or unreadable, a symbolic link, a special file, or a missing SKILL.md", unscanned},
 }
 
 func finding(rule string, sev Severity, path string, line int, format string, a ...any) Finding {
@@ -57,12 +59,70 @@ func hiddenClass(r rune) string {
 	switch {
 	case r == 0x200B || r == 0x200C || r == 0x200D || r == 0x2060 || (r >= 0x2061 && r <= 0x2064) || r == 0xFEFF || r == 0x180E:
 		return "zero-width"
+	case r == 0x00AD || r == 0x034F:
+		return "invisible formatting"
+	case r == 0x115F || r == 0x1160 || r == 0x3164 || r == 0xFFA0:
+		return "Hangul filler"
 	case r >= 0xE0000 && r <= 0xE007F:
 		return "Unicode tag"
+	case r >= 0xE0100 && r <= 0xE01EF:
+		return "variation selector"
 	case r == 0x061C || r == 0x200E || r == 0x200F || (r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069):
 		return "bidi control"
 	}
 	return ""
+}
+
+// hiddenIn lists the hidden code points of one line of text.
+func hiddenIn(l string) []string {
+	var seen []string
+	have := map[rune]bool{}
+	for _, r := range l {
+		if c := hiddenClass(r); c != "" && !have[r] {
+			have[r] = true
+			seen = append(seen, fmt.Sprintf("U+%04X (%s)", r, c))
+		}
+	}
+	return seen
+}
+
+// fmValue is one decoded string of the front matter, with the top-level key
+// whose line it is reported at.
+type fmValue struct {
+	key   string
+	value string
+}
+
+// fmStrings returns every string value of the decoded front matter, nested
+// ones included, in key order. A double-quoted value is read through its JSON
+// escapes here, so what a scan sees is what an agent's reader sees.
+func fmStrings(s *skill) []fmValue {
+	var out []fmValue
+	var walk func(key string, v any)
+	walk = func(key string, v any) {
+		switch t := v.(type) {
+		case string:
+			out = append(out, fmValue{key, t})
+		case map[string]any:
+			names := make([]string, 0, len(t))
+			for k := range t {
+				names = append(names, k)
+			}
+			sort.Strings(names)
+			for _, k := range names {
+				walk(key, t[k])
+			}
+		}
+	}
+	names := make([]string, 0, len(s.fm))
+	for k := range s.fm {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	for _, k := range names {
+		walk(k, s.fm[k])
+	}
+	return out
 }
 
 func hiddenText(s *skill, _ Config) []Finding {
@@ -72,18 +132,27 @@ func hiddenText(s *skill, _ Config) []Finding {
 			continue
 		}
 		for i, l := range lines(f) {
-			var seen []string
-			have := map[rune]bool{}
-			for _, r := range l {
-				if c := hiddenClass(r); c != "" && !have[r] {
-					have[r] = true
-					seen = append(seen, fmt.Sprintf("U+%04X (%s)", r, c))
-				}
-			}
-			if len(seen) > 0 {
+			if seen := hiddenIn(l); len(seen) > 0 {
 				out = append(out, finding(RuleHiddenText, Refuse, f.path, i+1,
 					"the line holds characters a reader cannot see, %s; the text an agent reads is not the text a person reviews", strings.Join(seen, ", ")))
 			}
+		}
+	}
+	// The decoded front matter values: an escape in a double-quoted string is
+	// ASCII in the file and a hidden character in what the agent reads.
+	for _, v := range fmStrings(s) {
+		seen := hiddenIn(v.value)
+		if len(seen) == 0 {
+			continue
+		}
+		line := s.fmLine(v.key)
+		dup := false
+		for _, o := range out {
+			dup = dup || (o.Path == "SKILL.md" && o.Line == line)
+		}
+		if !dup {
+			out = append(out, finding(RuleHiddenText, Refuse, "SKILL.md", line,
+				"the front matter value of %q holds characters a reader cannot see once decoded, %s; the text an agent reads is not the text a person reviews", v.key, strings.Join(seen, ", ")))
 		}
 	}
 	return out
@@ -145,7 +214,7 @@ func normalize(text string) (string, []int) {
 				space = true
 			}
 			continue
-		case hiddenClass(r) != "":
+		case hiddenClass(r) != "" || (r >= 0xFE00 && r <= 0xFE0F): // U+FE00 to U+FE0F are read through, not flagged: emoji use them
 			continue
 		}
 		space = false
@@ -160,16 +229,16 @@ func normalize(text string) (string, []int) {
 
 func overridePhrase(s *skill, _ Config) []Finding {
 	var out []Finding
-	for _, f := range s.files {
-		if !f.text {
-			continue
-		}
-		norm, lineOf := normalize(string(f.data))
-		type key struct {
-			line   int
-			phrase string
-		}
-		seen := map[key]bool{}
+	type key struct {
+		path   string
+		line   int
+		phrase string
+	}
+	seen := map[key]bool{}
+	// scan reports each phrase once per file and line. lineAt maps a line of
+	// the scanned text to the line to report.
+	scan := func(path, text string, lineAt func(int) int) {
+		norm, lineOf := normalize(text)
 		for _, p := range OverridePhrases {
 			for from := 0; ; {
 				i := strings.Index(norm[from:], p)
@@ -177,15 +246,25 @@ func overridePhrase(s *skill, _ Config) []Finding {
 					break
 				}
 				at := from + i
-				k := key{lineOf[at], p}
+				k := key{path, lineAt(lineOf[at]), p}
 				if !seen[k] {
 					seen[k] = true
-					out = append(out, finding(RuleOverridePhrase, Flag, f.path, k.line,
+					out = append(out, finding(RuleOverridePhrase, Flag, path, k.line,
 						"the text says %q, which tells an agent to drop the instructions it was given; read the sentence and decide whether the skill means it", p))
 				}
 				from = at + len(p)
 			}
 		}
+	}
+	for _, f := range s.files {
+		if f.text {
+			scan(f.path, string(f.data), func(n int) int { return n })
+		}
+	}
+	// The decoded front matter values, as an agent's reader sees them.
+	for _, v := range fmStrings(s) {
+		line := s.fmLine(v.key)
+		scan("SKILL.md", v.value, func(int) int { return line })
 	}
 	return out
 }
@@ -295,27 +374,40 @@ func ScriptExtensions() []string {
 var machineMagic = []struct {
 	prefix string
 	what   string
+	// binaryOnly: two ASCII letters begin plenty of text, so the prefix counts
+	// only in a file that is not UTF-8 text.
+	binaryOnly bool
 }{
-	{"\x7fELF", "an ELF executable"},
-	{"\xfe\xed\xfa\xce", "a Mach-O executable"},
-	{"\xfe\xed\xfa\xcf", "a Mach-O executable"},
-	{"\xce\xfa\xed\xfe", "a Mach-O executable"},
-	{"\xcf\xfa\xed\xfe", "a Mach-O executable"},
-	{"\xca\xfe\xba\xbe", "a Mach-O universal or Java class file"},
-	{"MZ", "a Windows executable"},
+	{"\x7fELF", "an ELF executable", false},
+	{"\xfe\xed\xfa\xce", "a Mach-O executable", false},
+	{"\xfe\xed\xfa\xcf", "a Mach-O executable", false},
+	{"\xce\xfa\xed\xfe", "a Mach-O executable", false},
+	{"\xcf\xfa\xed\xfe", "a Mach-O executable", false},
+	{"\xca\xfe\xba\xbe", "a Mach-O universal or Java class file", false},
+	{"MZ", "a Windows executable", true},
 }
 
 const toolNext = "a script never enters a skill: admit it as a tool through `saphan tool admit` and cite the tool by id"
 
+// underScripts reports whether any directory of rel is named scripts.
+func underScripts(rel string) bool {
+	for _, seg := range strings.Split(path.Dir(rel), "/") {
+		if seg == "scripts" {
+			return true
+		}
+	}
+	return false
+}
+
 func executable(s *skill, _ Config) []Finding {
 	var out []Finding
 	for _, d := range s.dirs {
-		if d == "scripts" {
-			out = append(out, finding(RuleExecutable, Refuse, d, 1, "the skill has a scripts/ directory; %s", toolNext))
+		if path.Base(d) == "scripts" {
+			out = append(out, finding(RuleExecutable, Refuse, d, 1, "the skill has a scripts/ directory at %s; %s", d, toolNext))
 		}
 	}
 	for _, f := range s.files {
-		if strings.HasPrefix(f.path, "scripts/") {
+		if underScripts(f.path) {
 			continue // covered by the directory's finding
 		}
 		var why string
@@ -328,7 +420,7 @@ func executable(s *skill, _ Config) []Finding {
 			why = "has the script extension " + strings.ToLower(path.Ext(f.path))
 		default:
 			for _, m := range machineMagic {
-				if strings.HasPrefix(string(f.data), m.prefix) {
+				if strings.HasPrefix(string(f.data), m.prefix) && !(m.binaryOnly && f.text) {
 					why = "is " + m.what
 					break
 				}
@@ -396,6 +488,38 @@ func dedupe(in []string) []string {
 			seen[v] = true
 			out = append(out, v)
 		}
+	}
+	return out
+}
+
+// ---- entries no text rule read ----
+
+// unscanned makes what the run could not read a finding. A remark tells a
+// reader what was missed; only a finding changes the exit code, and a file the
+// rules never saw must not let a run end as if it held nothing.
+func unscanned(s *skill, _ Config) []Finding {
+	var out []Finding
+	haveSkillMd := false
+	for _, f := range s.files {
+		if f.path == "SKILL.md" {
+			haveSkillMd = true
+		}
+		if !f.text {
+			out = append(out, finding(RuleUnscanned, Flag, f.path, 1,
+				"the file was not read as text (%s), so no text rule saw it; a reader may decode it and find instructions this check did not, so read it before accepting the skill", f.why))
+		}
+	}
+	if !haveSkillMd {
+		out = append(out, finding(RuleUnscanned, Flag, "SKILL.md", 1,
+			"there is no SKILL.md file in the directory, so there is no skill text to check and no front matter to read; give the directory of a skill"))
+	}
+	for _, p := range s.symlinks {
+		out = append(out, finding(RuleUnscanned, Flag, p, 1,
+			"the symbolic link was not followed and its target was not read; a link can lead outside the skill, so replace it with the file or read the target before accepting the skill"))
+	}
+	for _, p := range s.special {
+		out = append(out, finding(RuleUnscanned, Flag, p, 1,
+			"the entry is not a regular file or directory and was not read; remove it or read it before accepting the skill"))
 	}
 	return out
 }

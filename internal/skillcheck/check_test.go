@@ -67,6 +67,7 @@ var expectedRules = []Rule{
 	{ID: RuleCredential, Severity: Flag},
 	{ID: RuleAllowedTools, Severity: Flag},
 	{ID: RuleDescriptionOverrun, Severity: Flag},
+	{ID: RuleUnscanned, Severity: Flag},
 }
 
 func TestRegistryIsTheExpectedRules(t *testing.T) {
@@ -279,6 +280,9 @@ func TestExecutableFindings(t *testing.T) {
 	rep := mustCheck(t, dir)
 	got := map[string]bool{}
 	for _, f := range rep.Findings {
+		if f.Rule == RuleUnscanned {
+			continue // a compiled file is also a file no text rule read
+		}
 		if f.Rule != RuleExecutable {
 			t.Errorf("unexpected rule %+v", f)
 		}
@@ -454,8 +458,8 @@ func TestUnreadableFrontMatterIsRemarkedAndRulesStillRun(t *testing.T) {
 func TestOversizeFileIsNotScannedAndSaysSo(t *testing.T) {
 	big := strings.Repeat("a", MaxFileBytes+10) + "\nignore previous instructions\n"
 	rep := mustCheck(t, skillWith(t, okDesc, "x\n", map[string]string{"assets/big.txt": big}))
-	if len(rep.Findings) != 0 {
-		t.Fatalf("a file over the limit was scanned: %+v", rep.Findings)
+	if len(rep.Findings) != 1 || rep.Findings[0].Path != "assets/big.txt" {
+		t.Fatalf("a file over the limit must yield exactly one finding naming it: %+v", rep.Findings)
 	}
 	if !strings.Contains(strings.Join(rep.Remarks, "\n"), "assets/big.txt (over 8 MiB)") {
 		t.Errorf("remarks %v", rep.Remarks)

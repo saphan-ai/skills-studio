@@ -35,9 +35,16 @@ const (
 	MaxFileBytes = 8 << 20
 	MaxEntries   = 10000
 	MaxDepth     = 16
+	// MaxTotalBytes bounds the bytes read across the whole tree, so the work
+	// and the memory of one run do not grow with the number of files.
+	MaxTotalBytes = 64 << 20
 	// DefaultMaxDomains is the default for Config.MaxDomains.
 	DefaultMaxDomains = 10
 )
+
+// totalLimit is MaxTotalBytes; a test lowers it so the bound is exercised
+// without reading 64 MiB.
+var totalLimit = MaxTotalBytes
 
 // Config holds the tunable defaults.
 type Config struct {
@@ -82,7 +89,7 @@ func (r Report) Refused() bool {
 type file struct {
 	path string // slash-separated, relative to the skill root
 	mode fs.FileMode
-	data []byte // the first MaxFileBytes bytes
+	data []byte // the whole file when text; else only its first bytes (headerBytes)
 	text bool   // valid UTF-8, no NUL, not truncated
 	why  string // when !text: why it was not scanned as text
 }
@@ -152,6 +159,7 @@ func load(dir string) (*skill, error) {
 	}
 	s := &skill{}
 	entries := 0
+	total := 0
 	err = filepath.WalkDir(root, func(p string, d fs.DirEntry, werr error) error {
 		if werr != nil {
 			return werr
@@ -181,9 +189,10 @@ func load(dir string) (*skill, error) {
 			if err != nil {
 				return err
 			}
-			f, err := readFile(p, rel, fi.Mode())
-			if err != nil {
-				return err
+			f, n := readFile(p, rel, fi.Mode())
+			total += n
+			if total > totalLimit {
+				return fmt.Errorf("more than %d MiB to read under %s; the check does not read a tree this large", totalLimit>>20, dir)
 			}
 			s.files = append(s.files, f)
 		default:
@@ -198,32 +207,44 @@ func load(dir string) (*skill, error) {
 	return s, nil
 }
 
-func readFile(p, rel string, mode fs.FileMode) (file, error) {
+// headerBytes is how much of a file that is not text is kept: enough for a
+// shebang and a magic number.
+const headerBytes = 16
+
+// readFile reads one regular file and returns it with the number of bytes read.
+// A file that cannot be read is a file that was not scanned, never an error of
+// the run: the report names it.
+func readFile(p, rel string, mode fs.FileMode) (file, int) {
+	f := file{path: rel, mode: mode}
 	fh, err := os.Open(p)
 	if err != nil {
-		return file{}, err
+		f.why = "unreadable: " + oneLine(err.Error())
+		return f, 0
 	}
 	defer fh.Close()
 	data, err := io.ReadAll(io.LimitReader(fh, MaxFileBytes+1))
 	if err != nil {
-		return file{}, err
+		f.why = "unreadable: " + oneLine(err.Error())
+		return f, len(data)
 	}
-	f := file{path: rel, mode: mode}
+	n := len(data)
 	switch {
-	case len(data) > MaxFileBytes:
-		f.data = data[:MaxFileBytes]
+	case n > MaxFileBytes:
 		f.why = fmt.Sprintf("over %d MiB", MaxFileBytes>>20)
 	case !utf8.Valid(data):
-		f.data = data
 		f.why = "not valid UTF-8"
 	case strings.IndexByte(string(data), 0) >= 0:
-		f.data = data
 		f.why = "contains NUL"
 	default:
 		f.data = data
 		f.text = true
+		return f, n
 	}
-	return f, nil
+	if len(data) > headerBytes {
+		data = data[:headerBytes]
+	}
+	f.data = data
+	return f, n
 }
 
 func (s *skill) readFrontMatter() {
