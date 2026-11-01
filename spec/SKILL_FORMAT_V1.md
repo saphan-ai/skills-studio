@@ -41,7 +41,11 @@ Rules for the directory:
 - Its only other entries MAY be `references/` and `assets/`, each a directory
   (`SF-FILE-UNLISTED`). Directories nested inside them are allowed.
 - It MUST NOT contain a `scripts/` entry (`SF-FILE-SCRIPT`). See section 7.
-- Nothing in it, at any depth, MAY be a symbolic link (`SF-FILE-SYMLINK`).
+- Nothing in it, at any depth, MAY be a symbolic link (`SF-FILE-SYMLINK`), and
+  neither may the skill directory itself: a verifier is given the directory, not
+  a link to it (`SF-FILE-SYMLINK`).
+- A verifier that cannot read a directory under `references/` or `assets/` does
+  not report the skill as passing or as refused; it reports an error.
 - The format does not read the files under `references/` and `assets/`: it does
   not hash them, parse them or limit their types. Section 8 says what the hash
   therefore does not cover.
@@ -64,11 +68,19 @@ A file whose first line is not exactly the opening line has no header: a line
 that merely begins with those characters, or a header-like block lower in the
 file, is ordinary text. A header that is never closed, or whose closing line is
 not followed by one blank line, makes the file invalid (`SF-HEADER-MALFORMED`).
+A header followed by more than one blank line is not malformed: one blank line
+goes with the header, the next begins the canonical text, and a canonical text
+that does not begin with `---` is refused by `SF-FRONTMATTER-MISSING`.
 Only one header is removed.
 
 The header is not part of the skill. Everything after the blank line is the
 **canonical text** (section 8). A file without a header is its own canonical
 text.
+
+The header is not covered by the canonical hash or by any signature: two files
+that differ only in their header have the same canonical hash. A consumer that
+hands a skill to an agent MUST give an agent the canonical text, with the header
+removed, and never the stored file.
 
 ## 4. Front matter
 
@@ -95,7 +107,21 @@ the following subset of YAML and nothing more (`SF-FRONTMATTER-SYNTAX`):
     `~` is null, a decimal number such as `3` or `-1.5` is a number, and
     anything else is a string. The plain words `y`, `n`, `yes`, `no`, `on` and
     `off`, in any letter case, are refused, because some YAML readers turn them
-    into booleans: write them in quotes.
+    into booleans: write them in quotes. A plain scalar that some YAML 1.1 or
+    1.2 core-schema reader reads as something other than the string given here is
+    refused as well, and every one of these is written in quotes instead:
+    - a scalar that begins with `#` (a YAML reader reads a comment, so null);
+    - an integer written `0x…`, `0o…` or `0b…`, or with a leading zero and
+      octal digits such as `017`;
+    - `.inf` or `.nan`, in any letter case, with an optional sign;
+    - a YAML 1.1 timestamp: `2026-10-31`, or a date followed by a time, as in
+      `2026-10-31T10:20:30Z` or `2026-10-31 10:20:30 +1`;
+    - a number written with `_`, such as `1_000`;
+    - a sexagesimal number, digits joined by `:`, such as `1:20` or `1:20:30.5`.
+- The front matter MUST NOT contain a non-printable code point: a C0 control
+  other than TAB, DEL (U+007F), a C1 control (U+0080 to U+009F, which includes
+  U+0085), U+2028 or U+2029. This holds for every line between the two `---`
+  lines, comments and quoted strings included.
 - Lists, inline maps, anchors, tags, multi-line and folded (`|`, `>`) scalars
   are not in the subset. Quote the text instead.
 
@@ -259,6 +285,12 @@ checks against a public key the verifier was given. That is all.
   `PUBLIC KEY` block.
 - Verification is offline. It reads the two files and the skill directory and
   contacts nothing.
+
+A verifier refuses a public key that is a point of small order (a key for which
+a signature can be written without holding any private key), under
+`SF-PUBKEY-MALFORMED`. The header of section 3.1 is not covered by the hash or
+by a signature, so a consumer MUST give an agent the canonical text, never the
+stored file.
 
 What verification establishes: the canonical text is byte for byte the text the
 holder of that key signed. What it does not establish: who holds the key, that

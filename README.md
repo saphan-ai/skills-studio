@@ -50,6 +50,9 @@ hash, with no network access. Exit codes: `0` pass, `1` refused with a named rul
 
 A skill is *verified* when a signature over its canonical hash checks against a
 public key you supplied. That tells you the text is the text that key signed.
+The projection header a store may write above a skill is not covered by the hash
+or by a signature: a consumer MUST give an agent the canonical text, with the
+header removed, and never the stored file.
 
 It does not tell you who holds the key, what the skill makes an agent do, or how
 it behaves on any model. Skills Studio makes no claim about a skill beyond the

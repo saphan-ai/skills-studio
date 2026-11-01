@@ -21,8 +21,8 @@ The specification, the JSON Schema and `skills verify`. In particular, report:
 - a skill directory `skills verify` accepts although the specification refuses it
   (for example a `scripts/` entry, a symbolic link or an unlisted file that gets
   through);
-- two different `SKILL.md` texts that have the same canonical hash, or one text
-  that gets two hashes;
+- two different canonical texts that have the same canonical hash, or one
+  canonical text that gets two hashes;
 - a signature that verifies when it should not, or a verification that reaches
   the network;
 - a crash, a hang or unbounded memory use on a crafted skill directory;
