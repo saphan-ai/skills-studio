@@ -30,9 +30,13 @@ func (r Result) Passed() bool { return len(r.Violations) == 0 && r.Hash != "" }
 // hash. The error return is for what is not a refusal of the skill — a path
 // that is not a readable directory.
 func Verify(dir string) (Result, error) {
-	info, err := os.Stat(dir)
+	// Lstat on the cleaned path: a trailing separator would make the system follow a link.
+	info, err := os.Lstat(filepath.Clean(dir))
 	if err != nil {
 		return Result{}, err
+	}
+	if info.Mode()&fs.ModeSymlink != 0 {
+		return Result{Violations: []Violation{{Rule: RuleFileSymlink, Path: ".", Message: "the skill directory is a symbolic link; give the directory itself"}}}, nil
 	}
 	if !info.IsDir() {
 		return Result{}, fmt.Errorf("%s is not a directory", dir)
@@ -53,7 +57,11 @@ func Verify(dir string) (Result, error) {
 	}
 	hasSkill := false
 	for _, e := range entries {
-		res.Violations = append(res.Violations, checkEntry(abs, e)...)
+		vs, err := checkEntry(abs, e)
+		if err != nil {
+			return Result{}, err
+		}
+		res.Violations = append(res.Violations, vs...)
 		if e.Name() == "SKILL.md" && e.Type().IsRegular() {
 			hasSkill = true
 		}
@@ -124,33 +132,36 @@ func prefixed(p string) string {
 }
 
 // checkEntry applies the layout rules to one entry of the skill root.
-func checkEntry(root string, e fs.DirEntry) []Violation {
+// The error return is for a tree that could not be read: the check cannot say
+// the layout is clean, so it says nothing about it.
+func checkEntry(root string, e fs.DirEntry) ([]Violation, error) {
 	name := e.Name()
 	switch {
 	case e.Type()&fs.ModeSymlink != 0:
-		return []Violation{{Rule: RuleFileSymlink, Path: name, Message: "a symbolic link; the skill holds regular files and directories only"}}
+		return []Violation{{Rule: RuleFileSymlink, Path: name, Message: "a symbolic link; the skill holds regular files and directories only"}}, nil
 	case name == "scripts":
-		return []Violation{{Rule: RuleFileScript, Path: name, Message: "a script never enters a skill; publish it as a tool and cite the tool by id"}}
+		return []Violation{{Rule: RuleFileScript, Path: name, Message: "a script never enters a skill; publish it as a tool and cite the tool by id"}}, nil
 	case name == "SKILL.md":
 		if !e.Type().IsRegular() {
-			return []Violation{{Rule: RuleFileUnlisted, Path: name, Message: "SKILL.md is not a regular file"}}
+			return []Violation{{Rule: RuleFileUnlisted, Path: name, Message: "SKILL.md is not a regular file"}}, nil
 		}
-		return nil
+		return nil, nil
 	case name == "references" || name == "assets":
 		if !e.IsDir() {
-			return []Violation{{Rule: RuleFileUnlisted, Path: name, Message: name + " must be a directory"}}
+			return []Violation{{Rule: RuleFileUnlisted, Path: name, Message: name + " must be a directory"}}, nil
 		}
 		return walkData(root, name)
 	}
-	return []Violation{{Rule: RuleFileUnlisted, Path: name, Message: "only SKILL.md, references/ and assets/ may sit in a skill directory"}}
+	return []Violation{{Rule: RuleFileUnlisted, Path: name, Message: "only SKILL.md, references/ and assets/ may sit in a skill directory"}}, nil
 }
 
 // walkData checks the tree under references/ or assets/ holds no symbolic link.
-func walkData(root, name string) []Violation {
+// A directory it cannot read is an error, never a skipped subtree.
+func walkData(root, name string) ([]Violation, error) {
 	var out []Violation
-	_ = filepath.WalkDir(filepath.Join(root, name), func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(filepath.Join(root, name), func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil
+			return err
 		}
 		if d.Type()&fs.ModeSymlink != 0 {
 			rel, _ := filepath.Rel(root, p)
@@ -158,7 +169,10 @@ func walkData(root, name string) []Violation {
 		}
 		return nil
 	})
-	return out
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func hasViolation(vs []Violation, rule, path string) bool {
