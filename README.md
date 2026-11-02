@@ -149,8 +149,8 @@ With `--signature` and `--pubkey` it also checks an ed25519 signature over that 
 ## What "verified" means, and what it does not
 
 A skill is *verified* when a signature over its canonical hash checks against a public key you supplied. That tells you
-the text is exactly the text that key signed. The projection header a store may write above a skill is covered by
-neither the hash nor any signature. A consumer MUST give an agent the canonical text, with the header removed, and never
+the text is exactly the text that key signed. The projection header a store may write above a skill
+is not covered by the hash or by a signature. A consumer MUST give an agent the canonical text, with the header removed, and never
 the stored file.
 
 Verification does not tell you who holds the key, what the skill makes an agent do, or how it behaves on any model.
