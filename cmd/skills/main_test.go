@@ -249,3 +249,13 @@ func TestSigningExamplesAreCurrent(t *testing.T) {
 		t.Errorf("the committed demonstration does not verify: exit %d, %q %q", code, out, errOut)
 	}
 }
+
+func TestVersionPrintsTheBuildVersion(t *testing.T) {
+	var out, errb bytes.Buffer
+	if code := run([]string{"version"}, &out, &errb); code != 0 {
+		t.Fatalf("version exited %d: %s", code, errb.String())
+	}
+	if got, want := out.String(), "skills "+version+"\n"; got != want {
+		t.Fatalf("version printed %q, want %q", got, want)
+	}
+}
