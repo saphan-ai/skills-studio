@@ -326,3 +326,129 @@ agrees with the reference verifier on every directory under `examples/`.
 Changes that accept a document v1 refuses, or refuse one it accepts, are a new
 major version with a new schema file. Additions that change no verdict, such as
 a corrected sentence, keep the version.
+
+## 12. Static checks
+
+`skills check <dir>` runs deterministic checks over a skill directory. It
+reads files and nothing else: no model, no network, no URL is opened. It is a
+separate act from `skills verify`: verification says which bytes were signed,
+and the static checks say which listed patterns those bytes do or do not
+contain. They read every file of the tree, `references/` and `assets/`
+included, which section 7 says `skills verify` does not.
+
+**A clean check is evidence of the absence of these patterns only.** It is not
+a statement about what the skill does on any model, and it is not a statement
+that the skill is harmless.
+
+Each finding carries a rule id, a `file:line`, a severity and one sentence.
+`refuse` means the skill must not be accepted as it stands. `flag` means a
+person should read the line first. Exit codes: 0 no finding, 1 at least one
+`refuse`, 3 only `flag`s, 2 usage or a tree over a limit. `--json` prints one
+object holding `findings`, `remarks`, `files_scanned` and `rules_run`.
+
+Exit 2 means no check ran: nothing was found and nothing was cleared. The
+command prints `remark: no check ran, so no finding was made and nothing was
+cleared` and the fixed remarks below to stderr, and nothing to stdout.
+`skills check --help` prints the usage and checks nothing; it takes no other
+argument, and `check <dir> --help` is a usage error, so a command line that
+names a directory never ends as a clean run without having read it.
+
+The check reads a bounded tree: a file up to 8 MiB, a tree up to 10000 entries
+and 16 levels deep, and 64 MiB read in all. A tree past a limit is a usage
+error (exit 2), never a partial read presented as a whole; a single file past
+8 MiB is not read as text and is a finding (`SC-UNSCANNED`).
+
+What the text rules did not read is a finding, not only a remark, so the exit
+code cannot be 0 over it: a file that is not UTF-8 text, contains NUL, is over
+8 MiB or cannot be read, a symbolic link (not followed), an entry that is
+neither a regular file nor a directory, a directory with no `SKILL.md`
+file, and a `SKILL.md` whose front matter is outside the subset of §4 (its
+bytes are read, but the decoded values are not, and the front matter parts of
+`SC-HIDDEN-TEXT`, `SC-OVERRIDE-PHRASE`, `SC-ALLOWED-TOOLS` and
+`SC-DESCRIPTION-OVERCLAIM` do not run; the finding names the error). A skill
+whose `SKILL.md` cannot be read is therefore never a clean run.
+
+| rule | severity | finds |
+|---|---|---|
+| `SC-HIDDEN-TEXT` | refuse | a zero-width character (U+200B, U+200C, U+200D, U+2060 to U+2064, U+FEFF, U+180E), a Unicode tag character (U+E0000 to U+E007F) or a bidirectional control (U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069), a soft hyphen or combining grapheme joiner (U+00AD, U+034F), a Hangul filler (U+115F, U+1160, U+3164, U+FFA0) or a supplementary variation selector (U+E0100 to U+E01EF) in any text file, in each path of the tree, and in the decoded value of any front matter string the format's subset can read (a block outside the subset is a `SC-UNSCANNED` finding instead) |
+| `SC-OVERRIDE-PHRASE` | flag | a phrase from the list below that tells an agent to drop its instructions, in any text file and in the decoded value of any front matter string the subset can read |
+| `SC-URL` | flag | a URL that is neither a moving reference nor read by a fetch instruction |
+| `SC-URL-MOVING-REF` | flag | a URL with a path segment `main`, `master`, `HEAD` or `latest` (also after an `@`), so the bytes behind it change without the skill changing |
+| `SC-URL-FETCH` | refuse | a URL on a line with, or one line before or after, a fetch instruction (`fetch`, `WebFetch`, `curl`, `wget`), so behaviour is read at run time from outside the hashed bytes |
+| `SC-EXECUTABLE` | refuse | a `scripts/` directory, a file with an executable permission bit, a file that starts with a shebang, a compiled executable (ELF, Mach-O, Windows), or a script file extension, anywhere in the skill |
+| `SC-CREDENTIAL` | flag | a credential path (`~/.ssh`, `~/.aws`, `.netrc`, `id_rsa` and its kin, `*.pem`) or an environment variable named like a token or key |
+| `SC-ALLOWED-TOOLS` | flag | an `allowed-tools` key; the sentence names each tool it pre-approves |
+| `SC-DESCRIPTION-OVERCLAIM` | flag | a description that asks to be used for all, any or every task, or lists more than the configured number of alternatives in one sentence |
+| `SC-UNSCANNED` | flag | an entry the text rules did not read: a file that is not UTF-8 text, over 8 MiB or unreadable, a symbolic link, a special file, a missing `SKILL.md`, or a `SKILL.md` whose front matter is outside the subset (not decoded; four rules' front matter parts did not run) |
+
+Each URL yields exactly one finding, under the strongest rule that applies:
+`SC-URL-FETCH`, then `SC-URL-MOVING-REF`, then `SC-URL`. A file that is found
+under a directory named `scripts`, at any depth, is covered by that directory's finding. The magic number `MZ` counts only in a file that is not UTF-8 text.
+`SC-EXECUTABLE` names the next act: a script never enters a skill; admit it as
+a tool through `saphan tool admit` and cite the tool by id.
+
+The description rule counts alternatives, not subjects: it takes the longest
+list in one sentence of the description, items separated by commas or
+semicolons, and flags it when it has more than `--max-domains` items. The
+default is 10. The count is a measure of breadth; it does not know what the
+items are about. The wording rule matches `all`, `any` or `every`, then up to
+two words, then one of `task`, `request`, `prompt`, `job`, `query`,
+`question`, `situation`, `project` or `language` (singular or plural), and the
+words `everything` and `anything`.
+
+Override phrases (matched in lower case, with whitespace runs read as one
+space, invisible characters dropped and typographic apostrophes straightened,
+so a line break inside a phrase does not hide it). Front matter strings are
+matched after their escapes are decoded: a double-quoted value is read through
+its JSON escapes, so a value written with a backslash-u escape for a space between the words of a phrase is matched and a
+backslash-u escape for U+200B inside a value is hidden text. The variation selectors U+FE00 to U+FE0F are
+dropped before matching and are not flagged, because emoji carry them.
+
+**What is not folded.** The matching above is literal. These spellings are not
+matched, and a skill that uses them passes the phrase rule: full-width letters
+and other compatibility forms (NFKC is not applied), HTML entities, homoglyphs
+(a letter from another script that looks like a Latin one), combining marks
+placed on a letter, a URL split over lines, a URL without a scheme (`curl
+example.com/install`), a phrase in another language, and a phrase built up from
+parts. JSON escapes in front matter are decoded for the hidden-text and
+phrase rules only: a URL or a credential path written with escapes in a front
+matter value (`https:\/\/example.com\/main\/x.md`) is not matched by the URL
+and credential rules. The variation selectors U+FE00 to U+FE0F are not
+detected as hidden text. The remark below says so on every run.
+
+```
+ignore previous instructions
+ignore all previous instructions
+ignore prior instructions
+ignore all prior instructions
+ignore the above
+ignore your instructions
+ignore the system prompt
+disregard previous instructions
+disregard all previous instructions
+disregard your instructions
+forget previous instructions
+forget your instructions
+override your instructions
+override the system prompt
+reveal your system prompt
+do not tell the user
+don't tell the user
+without telling the user
+```
+
+Every run, with or without findings, ends with these remark lines, and may
+add more about what it could not read in that run (a file that is not UTF-8
+text, a symbolic link, a front matter the format could not read, and the
+list of rules that ran):
+
+```
+remark: a text scan cannot detect semantic hijacking: instructions that comply in wording and still steer an agent against its user; one outside study, cited at the owner's request and not re-checked here, measured 0 % detection by a text scanner alone
+remark: behaviour that lives at a fetched URL is outside the files read: this check opens no URL, so it cannot say what any URL returns now or will return later
+remark: the behaviour of a binary or non-text asset is not read; when the skill has one, a later remark lists it
+remark: patterns are literal text: a phrase in another language, in an encoding, or built up from parts is not matched, and neither are full-width letters, HTML entities, look-alike letters, combining marks, JSON escapes in front matter for URLs and credential paths, a URL split over lines, a URL without a scheme, or the variation selectors U+FE00 to U+FE0F
+remark: a clean result is evidence that these patterns are absent and nothing more: it is not a statement that the skill is harmless, and no model ran on it
+```
+
+A claim about behaviour needs its own evidence: the checks run, the models they
+ran on and the trace they produced. This section makes none.

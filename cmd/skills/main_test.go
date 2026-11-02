@@ -80,7 +80,7 @@ func TestExitCodes(t *testing.T) {
 		code int
 	}{
 		{"no arguments", nil, 2},
-		{"unknown verb", []string{"check", readFiles}, 2},
+		{"unknown verb", []string{"inspect", readFiles}, 2},
 		{"no directory", []string{"verify"}, 2},
 		{"two directories", []string{"verify", readFiles, readGit}, 2},
 		{"unknown flag", []string{"verify", readFiles, "--force"}, 2},

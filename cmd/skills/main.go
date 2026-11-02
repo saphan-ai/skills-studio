@@ -14,6 +14,7 @@ import (
 )
 
 const usage = `usage: skills verify <dir> [--signature <file> --pubkey <file>]
+       skills check <dir> [--json] [--max-domains N]    (see: skills check -h)
 
   verify <dir>   check the skill directory against skill format v1 and print
                  its canonical hash
@@ -31,6 +32,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
 		fmt.Fprint(stdout, usage)
 		return 0
+	}
+	if len(args) > 0 && args[0] == "check" {
+		return runCheck(args[1:], stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "verify" {
 		fmt.Fprint(stderr, usage)
