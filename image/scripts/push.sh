@@ -28,8 +28,16 @@ for platform in $(printf '%s' "$PUSH_PLATFORMS" | tr ',' ' '); do
     || { echo "scout: refusing $platform" >&2; refused=1; }
 done
 [ "$refused" -eq 0 ] || die "push: refusing to publish: a Docker Scout scan did not pass. Nothing was pushed."
-if [ -n "${PUSH_DRY_RUN:-}" ]; then echo "push: PUSH_DRY_RUN — scanned $digest; would copy it to $name:$version and $name:latest"; exit 0; fi
+if [ -n "${PUSH_DRY_RUN:-}" ]; then
+  # The rehearsal runs the same copy into a second local layout, so the source reference is proven without a registry.
+  skopeo copy --all --preserve-digests "oci:$work/skills" "oci:$work/copy-check:check" >/dev/null \
+    || die "push: PUSH_DRY_RUN — the scanned layout could not be copied"
+  echo "push: PUSH_DRY_RUN — scanned $digest and copied it locally; would copy it to $name:$version and $name:latest"
+  exit 0
+fi
 for tag in "$version" latest; do
-  skopeo copy --all "oci:$work/skills:$name:scan" "docker://$name:$tag"
+  skopeo copy --all --preserve-digests "oci:$work/skills" "docker://$name:$tag"
+  got=$(docker buildx imagetools inspect "$name:$tag" --format '{{.Manifest.Digest}}')
+  [ "$got" = "$digest" ] || die "push: $name:$tag carries $got, not the scanned $digest"
 done
 echo "push: published $name:$version and $name:latest at $digest"
