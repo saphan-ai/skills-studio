@@ -21,6 +21,8 @@ const usage = `usage: skills verify <dir> [--signature <file> --pubkey <file>]
   --signature    an ed25519 signature over the canonical hash
   --pubkey       the ed25519 public key that signature is checked against
 
+  version        print the version this binary was built as
+
 exit codes: 0 pass, 1 refused with a named rule, 2 usage
 `
 
@@ -29,6 +31,10 @@ func main() {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 1 && (args[0] == "version" || args[0] == "--version") {
+		fmt.Fprintln(stdout, "skills "+version)
+		return 0
+	}
 	if len(args) == 1 && (args[0] == "-h" || args[0] == "--help" || args[0] == "help") {
 		fmt.Fprint(stdout, usage)
 		return 0
