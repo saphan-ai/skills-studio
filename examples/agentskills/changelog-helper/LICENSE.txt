@@ -1,0 +1,4 @@
+Example terms written for this repository's examples directory.
+
+This skill is a made-up example. Use it however you like, at your own risk,
+and without any promise from the authors that it does anything.

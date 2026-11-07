@@ -1,6 +1,8 @@
 ---
 name: bad-syntax
-description: [a list, which the front matter subset does not read]
+description: >-
+  A folded scalar, which the front matter subset does not read
+  and a full YAML reader does.
 ---
 
 # Bad syntax

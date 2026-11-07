@@ -53,7 +53,7 @@ func TestSymlinkedSkillRootExitsOne(t *testing.T) {
 	if err := os.Symlink(abs, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	if code, out, errOut := do("verify", link); code != 1 || out != "" || !strings.HasPrefix(errOut, "refused SF-FILE-SYMLINK: ") {
+	if code, out, errOut := do("verify", link); code != 1 || out != "" || !strings.Contains(errOut, "refused SF-FILE-SYMLINK: ") || !strings.Contains(errOut, "refused AS-UNREAD: ") {
 		t.Errorf("exit %d, stdout %q, stderr %q", code, out, errOut)
 	}
 }

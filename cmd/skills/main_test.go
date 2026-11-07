@@ -89,8 +89,16 @@ func TestExitCodes(t *testing.T) {
 		{"key without signature", []string{"verify", readFiles, "--pubkey", sig}, 2},
 		{"missing directory", []string{"verify", filepath.Join(tmp, "absent")}, 2},
 		{"missing signature file", []string{"verify", readFiles, "--signature", filepath.Join(tmp, "absent"), "--pubkey", sig}, 2},
-		{"refused skill", []string{"verify", invalid}, 1},
-		{"refused skill with signature flags", []string{"verify", invalid, "--signature", sig, "--pubkey", sig}, 1},
+		{"outside the profile, no --level", []string{"verify", invalid}, 3},
+		{"outside the profile, --level 2", []string{"verify", invalid, "--level", "2"}, 1},
+		{"outside the profile, --level 1", []string{"verify", invalid, "--level", "1"}, 0},
+		{"outside the profile with signature flags", []string{"verify", invalid, "--signature", sig, "--pubkey", sig}, 3},
+		{"outside the profile with signature flags, --level 2", []string{"verify", invalid, "--level", "2", "--signature", sig, "--pubkey", sig}, 1},
+		{"not valid Agent Skills", []string{"verify", "../../examples/invalid/sf-name-required/no-name"}, 1},
+		{"not valid Agent Skills, --level 1", []string{"verify", "../../examples/invalid/sf-name-required/no-name", "--level", "1"}, 1},
+		{"bad level", []string{"verify", readFiles, "--level", "3"}, 2},
+		{"level without value", []string{"verify", readFiles, "--level"}, 2},
+		{"level 2 skill, --level 1", []string{"verify", readFiles, "--level", "1"}, 0},
 		{"pass", []string{"verify", readFiles}, 0},
 		{"help", []string{"--help"}, 0},
 	}
@@ -102,7 +110,7 @@ func TestExitCodes(t *testing.T) {
 }
 
 func TestRefusalNamesItsRuleOnStderr(t *testing.T) {
-	code, out, errOut := do("verify", "../../examples/invalid/sf-file-script/has-script")
+	code, out, errOut := do("verify", "--level", "2", "../../examples/invalid/sf-file-script/has-script")
 	if code != 1 || out != "" {
 		t.Fatalf("exit %d, stdout %q", code, out)
 	}

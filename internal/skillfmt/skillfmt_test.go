@@ -448,17 +448,41 @@ func TestPublicTextMakesNoSafetyClaim(t *testing.T) {
 }
 
 func TestTextRules(t *testing.T) {
+	// The text rule does not stop the run: the profile rules are evaluated on
+	// the text with the line ends and the mark normalized, so a skill whose only
+	// fault is the text is refused by the text rule alone.
 	for name, text := range map[string]string{
-		"carriage return": "---\r\nname: demo\r\n---\r\n",
-		"bom":             "\xef\xbb\xbf---\nname: demo\n---\n",
-		"nul":             "---\nname: demo\x00\n---\n",
-		"invalid utf8":    "---\nname: \xff\n---\n",
+		"carriage return": "---\r\nname: demo\r\ndescription: d\r\n---\r\n",
+		"bom":             "\xef\xbb\xbf---\nname: demo\ndescription: d\n---\n",
 	} {
 		res, _ := Verify(writeSkill(t, "demo", text))
 		if got := rulesOf(res.Violations); !reflect.DeepEqual(got, []string{RuleTextEncoding}) {
 			t.Errorf("%s: refused by %v", name, got)
 		}
+		if res.Level != 1 {
+			t.Errorf("%s: level %d, want 1 (valid Agent Skills, outside the profile)", name, res.Level)
+		}
 	}
+	// A NUL byte or invalid UTF-8 cannot be normalized away: the text rule is
+	// reported, with whatever else the reader finds on the same bytes.
+	for name, text := range map[string]string{
+		"nul":          "---\nname: demo\x00\n---\n",
+		"invalid utf8": "---\nname: \xff\n---\n",
+	} {
+		res, _ := Verify(writeSkill(t, "demo", text))
+		if got := rulesOf(res.Violations); !contains(got, RuleTextEncoding) {
+			t.Errorf("%s: refused by %v, want %s among them", name, got, RuleTextEncoding)
+		}
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func TestFrontMatterReader(t *testing.T) {

@@ -1,0 +1,3 @@
+Example terms written for this repository's examples directory.
+
+This skill is a made-up example, free to use and copy, with no promise attached.

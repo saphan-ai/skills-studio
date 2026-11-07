@@ -73,21 +73,28 @@ func TestPublishedRuleSetsEqualTheCodeList(t *testing.T) {
 // from its Lstat size, and the verifier asks for a constant multiple of the
 // limit, never a multiple of the file.
 func TestOversizedSkillMdIsRefusedWithBoundedAllocation(t *testing.T) {
-	big := "---\n" + strings.Repeat("\n", MaxSkillMDBytes) // MaxSkillMDBytes+4 bytes
-	dir := writeSkill(t, "demo", big)
-	var before, after runtime.MemStats
-	runtime.GC()
-	runtime.ReadMemStats(&before)
-	res, err := Verify(dir)
-	runtime.ReadMemStats(&after)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := rulesOf(res.Violations); !reflect.DeepEqual(got, []string{RuleSkillMDSize}) || res.Hash != "" {
-		t.Fatalf("refused by %v with hash %q, want only %s", got, res.Hash, RuleSkillMDSize)
-	}
-	if grew := after.TotalAlloc - before.TotalAlloc; grew > uint64(MaxSkillMDBytes) {
-		t.Errorf("verifying an oversized file allocated %d bytes, more than the limit %d", grew, MaxSkillMDBytes)
+	// Level 1 reads the head of the file, at most MaxLevel1PrefixBytes, so the
+	// allowance is a constant multiple of that bound, whatever the file size.
+	for _, size := range []int{MaxSkillMDBytes, 32 * MaxSkillMDBytes} {
+		big := "---\n" + strings.Repeat("\n", size)
+		dir := writeSkill(t, "demo", big)
+		var before, after runtime.MemStats
+		runtime.GC()
+		runtime.ReadMemStats(&before)
+		res, err := Verify(dir)
+		runtime.ReadMemStats(&after)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := rulesOf(res.Violations); !reflect.DeepEqual(got, []string{RuleSkillMDSize}) || res.Hash != "" {
+			t.Fatalf("refused by %v with hash %q, want only %s", got, res.Hash, RuleSkillMDSize)
+		}
+		if got := rulesOf(res.Level1); !reflect.DeepEqual(got, []string{RuleASUnread}) {
+			t.Errorf("level 1 refused by %v, want only %s (front matter never closed within the bound)", got, RuleASUnread)
+		}
+		if grew := after.TotalAlloc - before.TotalAlloc; grew > uint64(8*MaxLevel1PrefixBytes) {
+			t.Errorf("verifying a file of %d bytes allocated %d bytes, more than %d", size, grew, 8*MaxLevel1PrefixBytes)
+		}
 	}
 }
 

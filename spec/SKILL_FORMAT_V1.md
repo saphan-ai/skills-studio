@@ -256,7 +256,9 @@ above must print the two values shown.
 ## 9. Rules
 
 A verifier refuses with a named rule. The name is stable within version 1.
-`skills verify` exits 1 and prints every rule that applies, one line each.
+`skills verify --level 2` exits 1 and prints every rule that applies, one line
+each; without `--level`, the same skill exits 3 when it is valid Agent Skills
+(section 13).
 
 | rule | refuses |
 |---|---|
@@ -452,3 +454,120 @@ remark: a clean result is evidence that these patterns are absent and nothing mo
 
 A claim about behaviour needs its own evidence: the checks run, the models they
 ran on and the trace they produced. This section makes none.
+
+## 13. Two levels: valid Agent Skills, and the Saphan profile
+
+`skills verify` reads a skill directory at two levels and prints the one it
+reached.
+
+- **Level 1, valid Agent Skills.** The rules of the Agent Skills specification
+  page, and no others. The page is `https://agentskills.io/specification`; it was
+  read on **2026-11-02**, and it carries no version or date of its own, so that
+  date is the only pin there is.
+- **Level 2, the Saphan profile.** Level 1 and every rule of sections 2 to 9:
+  the layout, the YAML subset, the closed set of keys, the size limit and the
+  text rules. A skill at level 2 has the canonical hash of section 8.
+
+Level 2 includes level 1: a skill is never at level 2 without being valid Agent
+Skills. The rules of sections 2 to 9 are unchanged by this section; level 1 is
+added beneath them. (A decision-projection header, section 3.1, is read by level
+1 as the format reads it: the header is not part of the skill, and the page's
+rules are applied to the text after it.)
+
+### 13.1 What level 1 checks
+
+The front matter is read by a full YAML reader (YAML 1.2: only `true` and
+`false` are booleans, and a date is a string), not by the subset of section 4.
+A key whose value is YAML null is read as absent: the page lists `name` and
+`description` as required and the rest as optional, and says nothing of a key
+that is present with no value; reading it as absent keeps a skill that other
+readers accept (an empty `compatibility:` or `metadata:` line) from being
+refused for a state the page does not name. The rules, each taken from a
+sentence of the page:
+
+| rule | refuses |
+|---|---|
+| `AS-SKILLMD-MISSING` | a directory with no `SKILL.md`, or one that is not a regular file |
+| `AS-FRONTMATTER-MISSING` | a `SKILL.md` that does not open with a block closed by `---` |
+| `AS-FRONTMATTER-YAML` | a front matter that is not YAML, is not a mapping, is not valid UTF-8, repeats a key, or holds more than 10000 nodes |
+| `AS-NAME-REQUIRED` | no `name` |
+| `AS-NAME-LENGTH` | a `name` that is not 1 to 64 characters |
+| `AS-NAME-CHARS` | a `name` with a character that is not a unicode lowercase letter, a unicode digit or a hyphen (see the note below the table) |
+| `AS-NAME-HYPHEN` | a `name` that starts or ends with a hyphen or holds two hyphens in a row |
+| `AS-NAME-DIR-MISMATCH` | a `name` different from the parent directory name |
+| `AS-DESCRIPTION-REQUIRED` | no `description` |
+| `AS-DESCRIPTION-LENGTH` | a `description` that is not 1 to 1024 characters |
+| `AS-COMPATIBILITY-LENGTH` | a `compatibility` that is not 1 to 500 characters |
+| `AS-METADATA-TYPE` | a `metadata` that is not a map |
+| `AS-METADATA-VALUE-TYPE` | a `metadata` key or value that is not a string (a key YAML reads as an integer, a boolean, a float or null is refused; a quoted `"1"` is a string) |
+| `AS-FIELD-TYPE` | a `name`, `description`, `compatibility` or `allowed-tools` that is not a string |
+| `AS-UNREAD` | a file this program did not read: a symbolic link (the skill directory or `SKILL.md`), or a front matter that does not close within the first 65536 bytes |
+
+`AS-UNREAD` is a limit of this program and not a sentence of the page: a skill
+refused by it is not shown to be invalid, it is not read. Lengths are counted in
+characters (Unicode code points).
+
+**The name charset: the page contradicts itself, and level 1 takes the words.**
+The sentence of the page, read on 2026-11-02, is: "May only contain unicode
+lowercase alphanumeric characters (`a-z`, `0-9`) and hyphens (`-`)". It says
+unicode and lists ASCII ranges. Level 1 reads the words: a unicode lowercase
+letter or a unicode digit is accepted (`αβγ` is valid Agent Skills), because
+the narrower reading would refuse skills that the page's own word "unicode"
+licenses. Level 2 reads the ranges: the profile rule `SF-NAME-PATTERN` stays
+ASCII `a-z`, `0-9` and `-`, so such a skill is at level 1 and not at level 2.
+The cost: a skill the ranges were meant to exclude passes level 1.
+
+**Metadata keys: a non-string key is refused.** The page says metadata maps
+string to string. The front matter reader flattens every key to text, so the
+rule reads the YAML tag of each key before that: `{1: x}`, `true: x`, `1.5: x`
+and `~: x` are refused as `AS-METADATA-VALUE-TYPE`; a quoted `"1"` is accepted.
+
+**Unknown top-level keys: level 1 accepts them.** The page says nothing about
+them, and a rule the page does not state would make the verifier refuse skills
+that other readers accept; the closed set of keys is a profile rule
+(`SF-KEY-UNKNOWN`). The cost of the choice: a misspelt optional key, such as
+`licence`, is not reported at level 1, and is reported as outside the profile.
+
+### 13.2 What level 1 does not check
+
+Level 1 does not check: the layout of the directory (`scripts/`, `references/`,
+`assets/` and any other file or directory are allowed, and are not read); the
+type of `license` (the page gives it no length and no type rule); that the
+`allowed-tools` string is made of tool names, or that the tools exist; the size
+of `SKILL.md` (the page's 500 lines and 5000 tokens are guidance, and the body
+is not read at all); YAML merge keys (`<<`), which are not applied: a `<<` key is read as a literal
+key, so under `metadata` it is refused as a non-string value; whether the body is Markdown, valid UTF-8 or has LF line
+ends; a byte order mark or CR LF line ends (both are read through, and are
+profile rules); symbolic links inside the skill (they are not followed, and are
+profile rules); and anything the skill tells an agent to do. The page also names
+a reference validator, `skills-ref validate`; its checks are not listed on the
+page, it was not read, and level 1 makes no claim to agree with it.
+
+### 13.3 What `skills verify` prints, and its exit codes
+
+At level 2 it prints the skill name, `level: 2`, the canonical hash and the
+signature line, and exits 0. At level 1 it prints `level: 1` and one
+`outside-profile <rule>: <path>: <message>` line for **every** profile rule that
+keeps the skill out of level 2, not the first. Where the file is too large to be
+read whole (`SF-SKILLMD-SIZE`), the rules that need the whole file are named on a
+`not-evaluated:` line instead. Below level 1 it prints every refusal to standard
+error, level 1 rules first, and exits 1.
+
+| exit | meaning |
+|---|---|
+| 0 | level 2 reached (with `--level 1`: level 1 or 2) |
+| 1 | refused with a named rule: not valid Agent Skills, or below the level `--level` asked for |
+| 2 | usage, or a path that cannot be read |
+| 3 | valid Agent Skills (level 1) and outside the profile; this is not a refusal of the file |
+
+`--level 2` makes the check the profile check it was before this section: exit 0
+at level 2, exit 1 for anything below it, every rule printed to standard error.
+`--level 1` accepts either level. A signature is over the canonical hash, which
+exists at level 2 only; at level 1 the signature is reported as not checked.
+
+### 13.4 Examples
+
+`examples/agentskills/` holds skills written in the shape published skills have:
+a `scripts/` directory, a `LICENSE.txt`, a description over several lines, keys
+the profile does not define, a name outside `a-z`. Each is at level 1, and a
+test holds the profile rules each one breaks to an exact list.
