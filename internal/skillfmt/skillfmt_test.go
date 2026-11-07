@@ -408,7 +408,7 @@ func TestStatedHashesMatch(t *testing.T) {
 		}
 	}
 	if lines < 2 {
-		t.Errorf("expected the two fleet skills in HASHES.txt, found %d lines", lines)
+		t.Errorf("expected the two example skills in HASHES.txt, found %d lines", lines)
 	}
 }
 
@@ -430,8 +430,8 @@ func TestSpecWorkedExamplesStateTheRealHashes(t *testing.T) {
 	}
 }
 
-// The public text makes no claim that a skill is fit to run. The banned words
-// are the ones the owner's rule names.
+// The public text makes no claim that a skill is fit to run: none of the words
+// below appears in it.
 func TestPublicTextMakesNoSafetyClaim(t *testing.T) {
 	for _, p := range []string{"spec/SKILL_FORMAT_V1.md", "README.md", "SECURITY.md", "CONTRIBUTING.md", "examples/README.md"} {
 		data, err := os.ReadFile(repoPath(filepath.FromSlash(p)))
@@ -535,7 +535,7 @@ func TestFrontMatterReader(t *testing.T) {
 	}
 
 	// A plain scalar that a YAML 1.1 or 1.2-core reader resolves to something other
-	// than the string this reader would return is refused (review condition C1).
+	// than the string this reader would return is refused.
 	divergent := map[string]string{
 		"leading hash":            "#hello",
 		"hex":                     "0x1F",

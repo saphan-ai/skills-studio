@@ -445,7 +445,7 @@ text, a symbolic link, a front matter the format could not read, and the
 list of rules that ran):
 
 ```
-remark: a text scan cannot detect semantic hijacking: instructions that comply in wording and still steer an agent against its user; one outside study, cited at the owner's request and not re-checked here, measured 0 % detection by a text scanner alone
+remark: a text scan cannot detect semantic hijacking: instructions that comply in wording and still steer an agent against its user; one outside study, not re-checked here, measured 0 % detection by a text scanner alone
 remark: behaviour that lives at a fetched URL is outside the files read: this check opens no URL, so it cannot say what any URL returns now or will return later
 remark: the behaviour of a binary or non-text asset is not read; when the skill has one, a later remark lists it
 remark: patterns are literal text: a phrase in another language, in an encoding, or built up from parts is not matched, and neither are full-width letters, HTML entities, look-alike letters, combining marks, JSON escapes in front matter for URLs and credential paths, a URL split over lines, a URL without a scheme, or the variation selectors U+FE00 to U+FE0F

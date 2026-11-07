@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// C1: a fence with trailing blanks is read by level 1 and refused by the subset
+// A fence with trailing blanks is read by level 1 and refused by the subset
 // reader as SF-FRONTMATTER-MISSING; the schema rules must still be evaluated on
 // what level 1 read, so the outside-profile list is whole and the name is known.
 func TestBlankFenceSkillNamesEveryProfileRule(t *testing.T) {
@@ -33,7 +33,7 @@ func TestBlankFenceSkillNamesEveryProfileRule(t *testing.T) {
 	}
 }
 
-// C2: a metadata key must be a string, as the value must; a key YAML reads as
+// A metadata key must be a string, as the value must; a key YAML reads as
 // an integer, a boolean or null is refused at level 1.
 func TestMetadataKeyMustBeAString(t *testing.T) {
 	for name, front := range map[string]string{
@@ -62,7 +62,7 @@ func TestMetadataKeyMustBeAString(t *testing.T) {
 	}
 }
 
-// C3 (master ruling): level 1 reads "unicode lowercase alphanumeric" as unicode
+// Level 1 reads "unicode lowercase alphanumeric" as unicode
 // lowercase letters and digits; level 2 keeps ASCII a-z 0-9 -.
 func TestUnicodeNameIsLevel1AndNotLevel2(t *testing.T) {
 	for _, n := range []string{"αβγ", "demo-٣"} {
@@ -79,7 +79,7 @@ func TestUnicodeNameIsLevel1AndNotLevel2(t *testing.T) {
 	}
 }
 
-// R-2: the text rules with their exact lists (measured on this reader).
+// The text rules with their exact lists (measured on this reader).
 func TestTextRulesExactLists(t *testing.T) {
 	for name, c := range map[string]struct {
 		text string
@@ -97,7 +97,7 @@ func TestTextRulesExactLists(t *testing.T) {
 	}
 }
 
-// R-3: a null value is read as absent for every optional field too.
+// A null value is read as absent for every optional field too.
 func TestNullOptionalFieldsAreAbsent(t *testing.T) {
 	for _, f := range []string{"compatibility", "metadata", "allowed-tools", "license"} {
 		res, _ := Verify(writeSkill(t, "demo", "---\nname: demo\ndescription: d\n"+f+":\n---\n"))
@@ -111,7 +111,7 @@ func TestNullOptionalFieldsAreAbsent(t *testing.T) {
 	}
 }
 
-// R-4: a YAML merge key is a literal key; it is not applied.
+// A YAML merge key is a literal key; it is not applied.
 func TestMergeKeyIsNotApplied(t *testing.T) {
 	res, _ := Verify(writeSkill(t, "demo", "---\nname: demo\ndescription: d\nmetadata:\n  <<: {c: d}\n---\n"))
 	if got := rulesOf(res.Level1); !reflect.DeepEqual(got, []string{RuleASMetadataValueType}) {

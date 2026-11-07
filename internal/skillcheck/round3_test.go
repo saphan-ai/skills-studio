@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// Conditions of the second named review of skills check (round 3).
+// More edge cases of skills check.
 
 func unscannedAt(r Report, path string) *Finding {
 	for i, f := range r.Findings {
@@ -18,7 +18,7 @@ func unscannedAt(r Report, path string) *Finding {
 	return nil
 }
 
-// C1: front matter outside the subset is read by no rule, so it is a finding.
+// Front matter outside the subset is read by no rule, so it is a finding.
 func TestFrontMatterOutsideTheSubsetIsAFinding(t *testing.T) {
 	jsonEsc := bs + "u200B" + bs + "u202E"
 	cases := []struct {

@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// C2: a header followed by more than one blank line is not a header-malformed
+// A header followed by more than one blank line is not a header-malformed
 // file: one blank line goes with the header, the next makes the canonical text
 // begin with an empty line, so the front matter is missing.
 func TestHeaderFollowedByTwoBlankLinesIsFrontMatterMissing(t *testing.T) {
@@ -28,7 +28,7 @@ func TestHeaderFollowedByTwoBlankLinesIsFrontMatterMissing(t *testing.T) {
 	}
 }
 
-// C2: the header is outside the hash and the signature, so the texts say that a
+// The header is outside the hash and the signature, so the texts say that a
 // consumer gives an agent the canonical text and never the stored file.
 func TestPublicTextSaysTheHeaderIsNotCovered(t *testing.T) {
 	read := func(parts ...string) string {
@@ -68,7 +68,7 @@ func TestPublicTextSaysTheHeaderIsNotCovered(t *testing.T) {
 	}
 }
 
-// C3: the small-order public keys. The list is checked here against the group
+// The small-order public keys. The list is checked here against the group
 // law, not against memory: each of the eight points must satisfy 8P = identity
 // and they must be distinct, which is every point of that order since the
 // curve's group has a cyclic 2-part of order 8.
@@ -172,7 +172,7 @@ func mustDecodeHex(t *testing.T, s string) []byte {
 	return b
 }
 
-// C4: an unreadable directory under references/ is an error, never skipped.
+// An unreadable directory under references/ is an error, never skipped.
 func TestUnreadableDataDirectoryIsNotSkipped(t *testing.T) {
 	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
 		t.Skip("chmod 000 does not deny reads here")
@@ -194,7 +194,7 @@ func TestUnreadableDataDirectoryIsNotSkipped(t *testing.T) {
 	}
 }
 
-// C4: the skill root is not a symbolic link.
+// The skill root is not a symbolic link.
 func TestSymlinkedSkillRootIsRefused(t *testing.T) {
 	real := writeSkill(t, "other", skillText(""))
 	link := filepath.Join(t.TempDir(), "demo")

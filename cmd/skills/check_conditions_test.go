@@ -10,7 +10,7 @@ import (
 	"github.com/saphan-ai/skills-studio/internal/skillcheck"
 )
 
-// Conditions of the named review, round 2, at the command line.
+// Edge cases of `skills check`, at the command line.
 
 func TestUnscannedFileDoesNotExitZero(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "demo")

@@ -1,4 +1,4 @@
-# The canonical hash stated beside each fleet skill, as given when the skill was
+# The canonical hash stated beside each example skill, as given when the skill was
 # cut. `skills verify <dir>` must print the same value. Format: <hash>, two
 # spaces, the skill directory relative to examples/.
 7273c8112a081b0c93ac5b4f7a33f8dc4b6b50df2b55f0ae0dfdd8ff7000db2c  valid/read-files

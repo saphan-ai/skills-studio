@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// R-5 and C1 through the command: a level 1 skill whose fence the subset reader
+// Through the command: a level 1 skill whose fence the subset reader
 // refuses still prints its name and every outside-profile rule.
 func TestLevel1PrintsNameAndEveryRuleForABlankFence(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "c1")

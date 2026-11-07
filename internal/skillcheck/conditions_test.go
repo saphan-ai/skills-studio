@@ -10,8 +10,8 @@ import (
 	"unicode/utf16"
 )
 
-// Conditions of the named review of skills check (round 2). Each test is
-// written to fail on the round 1 tip for the reason its condition names.
+// Edge cases of skills check. Each test was written to fail, before its fix,
+// for the reason its name gives.
 
 var (
 	bs   = "\\"
