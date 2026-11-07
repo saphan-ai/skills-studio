@@ -11,6 +11,9 @@
   level 1 (valid Agent Skills) and prints every rule of the Saphan profile that
   keeps it out of level 2; it exits 3. A test holds each list to its exact rules.
   The text of every example was written for this repository.
+- `export/<format>/` — what `skills export examples/valid/all-fields --format <format>`
+  writes; a test compares each with its adapter. `adapter/` is a worked example of
+  a format anyone can add: one Go file and its test (see `docs/ADAPTERS.md`).
 - `signing/` — a demonstration of `--signature` and `--pubkey`:
 
   ```

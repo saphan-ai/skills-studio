@@ -6,6 +6,11 @@
 // level 1). Exit codes: 0 the level reached meets the one asked for (level 2
 // when no --level is given), 1 refused with a named rule, 2 usage, 3 valid
 // Agent Skills but outside the profile (no --level given).
+//
+//	skills export <dir> --format <name> --out <dir>
+//
+// writes the skill in another tool's format and prints every loss (see
+// docs/ADAPTERS.md). Exit codes: 0 exported, 1 refused, 2 usage.
 package main
 
 import (
@@ -23,6 +28,7 @@ const exitLevel1Only = 3
 
 const usage = `usage: skills verify <dir> [--level 1|2] [--signature <file> --pubkey <file>]
        skills check <dir> [--json] [--max-domains N]    (see: skills check -h)
+       skills export <dir> --format <name> --out <dir>  (see: skills export -h)
 
   verify <dir>   read the skill directory at two levels and print the level
                  reached: level 1, valid Agent Skills (the rules of the Agent
@@ -58,6 +64,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if len(args) > 0 && args[0] == "check" {
 		return runCheck(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "export" {
+		return runExport(args[1:], stdout, stderr)
 	}
 	if len(args) == 0 || args[0] != "verify" {
 		fmt.Fprint(stderr, usage)
